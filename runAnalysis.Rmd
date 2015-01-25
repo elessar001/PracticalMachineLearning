@@ -95,16 +95,16 @@ randomForest(x, y, ntree=ntree)
 Error data for the training data set can be seen below.  
 
 ```{r}
-predictions1 <- predict(rf, newdata=training)
-confusionMatrix(predictions1,training$classe)
+results1 <- predict(rf, newdata=training)
+confusionMatrix(results1,training$classe)
 ```
 
 It can be seen that the model is statistically significant at 1% (p value for accuracy > NIR is very low). Additionally the model seems to be able to learn with 100% accuracy in the in-sample data. This may lead to concerns of overfitting. However this can be verified by checking the performance of the algorithm on the testing data sample.
 
 
 ```{r}
-predictions2 <- predict(rf, newdata=testing)
-confusionMatrix(predictions2,testing$classe)
+results2 <- predict(rf, newdata=testing)
+confusionMatrix(results2,testing$classe)
 ```
 
 It can be seen from the performance of the algorithm on the test data that the accuracy of the algorithm is 99.36%. This was the primary reason behind choosing the Random Forests methodology over Support Vector Machine (Radial) and K Nearest Neighbours. It can also be seen that the model is statistically significant at 1% (p value for accuracy > NIR is very low).
