@@ -1,0 +1,138 @@
+---
+title: "Practical Machine Learning Project Report"
+author: "Abhijit Naik"
+date: "Sunday, January 25, 2015"
+output: html_document
+---
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data Sources
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project comes from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+
+## Cleaning Data
+
+For this assignment the provided data was analysed to determine what activity an individual performed. Caret and randomForest packages were used for learning, which allowed prediction for each of the 20 test data cases provided. A seed value was used for consistency of results so that debugging of the code was easier.
+
+```{r, message = FALSE}
+library(Hmisc)
+library(caret)
+library(randomForest)
+library(foreach)
+library(doParallel)
+set.seed(2048)
+options(warn=-1)
+```
+
+
+First, the data training and test data sets were loaded and cleaned. Some measurements in both data sets were expressed using "#DIV/0!" which were replaced with an "NA" value. Additionally columns from column 8 onwards were transformed into the numeric data type.
+
+
+```{r}
+training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!") )
+for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
+
+submission_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!") )
+for(i in c(8:ncol(submission_data)-1)) {submission_data[,i] = as.numeric(as.character(submission_data[,i]))}
+```
+
+With visual inspection it was noticed that some columns in the training data set were mostly blank. Since these columns were unlikely to be useful for the purposes of prediction they were removed. The modified data set contained columns with data that was complete. Columns representing user name, timestamps and, windows were also removed.
+
+Determine and display out feature set.
+
+```{r}
+chosen_columns <- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
+final_data <- training_data[chosen_columns]
+```
+
+A list of the selected data columns is given below
+
+```{r}
+chosen_columns
+```
+
+## Partitioning Data for Analysis
+
+The new data set was partitioned for training and testing. 75% of the data was used for training and 25% for testing
+
+```{r}
+idx <- createDataPartition(y=final_data$classe, p=0.75, list=FALSE )
+training <- final_data[idx,]
+testing <- final_data[-idx,]
+```
+
+
+## Supervised Learning
+
+Three different supervised learning methods were used for the purposes of training: Random Forests, Support Vector Machine (Radial), and K Nearest Neighbours. It was found that Random Forests was the most successful in modeling the problem at hand. In this report only the Random Forests method is discussed.
+
+6 random forests of 100 trees each were generated for the training data. Parallel processing was used to conduct the simulations. Several examples of parallel processing with random forests in R are available on the web. Parallel processing provided a great boost in reducing computational time. It was found that the sensitivity of the results to the number of trees was quite low as long as number of trees was greater than 100.
+
+```{r}
+registerDoParallel()
+x <- training[-ncol(training)]
+y <- training$classe
+
+rf <- foreach(ntree=rep(100, 6), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+randomForest(x, y, ntree=ntree) 
+}
+```
+
+Error data for the training data set can be seen below.  
+
+```{r}
+predictions1 <- predict(rf, newdata=training)
+confusionMatrix(predictions1,training$classe)
+```
+
+It can be seen that the model is statistically significant at 1% (p value for accuracy > NIR is very low). Additionally the model seems to be able to learn with 100% accuracy in the in-sample data. This may lead to concerns of overfitting. However this can be verified by checking the performance of the algorithm on the testing data sample.
+
+
+```{r}
+predictions2 <- predict(rf, newdata=testing)
+confusionMatrix(predictions2,testing$classe)
+```
+
+It can be seen from the performance of the algorithm on the test data that the accuracy of the algorithm is 99.36%. This was the primary reason behind choosing the Random Forests methodology over Support Vector Machine (Radial) and K Nearest Neighbours. It can also be seen that the model is statistically significant at 1% (p value for accuracy > NIR is very low).
+
+
+## Generating Answers for Submission Data
+
+Given this performance there is good reason to believe that the Random Forest methodology was used in the experiments. A good test of this reasoning is testing the learning model on the project submission (using submission data). It can be expected based on the accuracy rate that the learning model should be able to get almost all the answers correct.
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+
+x <- submission_data
+x <- x[chosen_columns[chosen_columns!='classe']]
+answers <- predict(rf, newdata=x)
+
+answers
+
+pml_write_files(answers)
+```
+
+## Conclusions
+
+It was found that the learning model was able to get all the answers correct. Hence it can be reasonably conjectured that Random Forests was the methodology used for learning in the experiment.
